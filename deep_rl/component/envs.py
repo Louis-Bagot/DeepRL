@@ -151,6 +151,9 @@ class DummyVecEnv(VecEnv):
 
 
 class Task:
+    """
+    Wrapper to handle multiple instances of the same environment (task)
+    """
     def __init__(self,
                  name,
                  num_envs=1,

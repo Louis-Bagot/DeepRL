@@ -18,6 +18,14 @@ class Config:
         self.actor_optimizer_fn = None
         self.critic_optimizer_fn = None
         self.network_fn = None
+        # RND stuff
+        self.pred_net_rnd_fn = None
+        self.targ_net_rnd_fn = None
+        self.coef_r = 2. # reward coefficient in the total reward r = w1*r+w2*r_i
+        self.coef_rrnd = 1.
+        self.steps_before_rnd = 1000 # filling up the observation memory
+        self.rnd_update_p = 0.25
+
         self.actor_network_fn = None
         self.critic_network_fn = None
         self.replay_fn = None
