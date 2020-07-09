@@ -13,16 +13,18 @@ import logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 from .misc import *
 
+local = False
+LOGDIR = './' if local else '/project/'
 
 def get_logger(tag='default', log_level=0):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     if tag is not None:
-        fh = logging.FileHandler('./log/%s-%s.txt' % (tag, get_time_str()))
+        fh = logging.FileHandler(LOGDIR+'log/%s-%s.txt' % (tag, get_time_str()))
         fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s'))
         fh.setLevel(logging.INFO)
         logger.addHandler(fh)
-    return Logger(logger, './tf_log/logger-%s-%s' % (tag, get_time_str()), log_level)
+    return Logger(logger, LOGDIR+'tf_log/logger-%s-%s' % (tag, get_time_str()), log_level)
 
 
 class Logger(object):

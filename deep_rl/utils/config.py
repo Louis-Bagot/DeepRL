@@ -22,9 +22,13 @@ class Config:
         self.pred_net_rnd_fn = None
         self.targ_net_rnd_fn = None
         self.coef_r = 2. # reward coefficient in the total reward r = w1*r+w2*r_i
+        self.coef_r_i = 1. # more general notation
+        self.fir = None
         self.coef_rrnd = 1.
-        self.steps_before_rnd = 1000 # filling up the observation memory
+        self.steps_before_rnd = 1000 # steps to init mean&std of the normalizer
         self.rnd_update_p = 0.25
+        self.rnd_normalize_r = True
+        self.rnd_normalize_s = True
 
         self.actor_network_fn = None
         self.critic_network_fn = None

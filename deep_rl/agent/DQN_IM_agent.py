@@ -9,9 +9,11 @@ from ..component import *
 from ..utils import *
 import time
 from .BaseAgent import *
+from .DQN_agent import *
 
 
-class DQNRNDActor(BaseActor):
+class DQN_IM_Actor(BaseActor):
+    """ No changes from the DQNActor here """
     def __init__(self, config):
         BaseActor.__init__(self, config)
         self.config = config
@@ -36,7 +38,12 @@ class DQNRNDActor(BaseActor):
         return entry
 
 
-class DQNRNDAgent(BaseAgent):
+class DQN_IM_Agent(BaseAgent):
+    """ DQN with intrinsic motivation.
+    The intrinsic motivation function fir generates an intrinsic reward
+    fir(s,a,s') = R_i from each transition.
+    Writing R_e the extrinsic reward, the total reward is then
+    R = coef_r * R_e + coef_r_i * R_i """
     def __init__(self, config):
         # CONFIG STUFF
         BaseAgent.__init__(self, config)
@@ -52,23 +59,18 @@ class DQNRNDAgent(BaseAgent):
         self.network.share_memory()
         self.target_network = config.network_fn()
         self.target_network.load_state_dict(self.network.state_dict())
-        ## RND predictor and target nets
-        self.pred_net_rnd = config.pred_net_rnd_fn()
-        self.targ_net_rnd = config.targ_net_rnd_fn()
+        ## Intrinsic reward function inits; weight in init
+        self.coef_r = config.coef_r # reward coefficient in the total reward r = w1*r+w2*r_i
+        self.coef_r_i = config.coef_r_i # intrinsic reward coef (beta)
+        self.fir = config.fir(config) # intrinsic reward function
+
         ## Optimizer with all learnable parameters
-        total_params = list(self.network.parameters()) + list(self.pred_net_rnd.parameters())
+        total_params = list(self.network.parameters()) + self.fir.learnable_params()
         self.optimizer = config.optimizer_fn(total_params)
 
         # ACTOR
-        self.actor = DQNRNDActor(config)
+        self.actor = DQN_IM_Actor(config)
         self.actor.set_network(self.network)
-
-        # RND NORMALIZATION AND HYPERPARAMETERS
-        self.rnd_state_normalizer = MeanStdNormalizer(clip=5)
-        # self.rnd_reward_normalizer = MeanStdNormalizer(clip=None)
-        self.rnd_reward_normalizer = None
-        self.coef_r = config.coef_r # reward coefficient in the total reward r = w1*r+w2*r_i
-        self.coef_rrnd = config.coef_rrnd
 
         # OTHER PARAMETER INITS
         self.total_steps = 0
@@ -86,27 +88,6 @@ class DQNRNDAgent(BaseAgent):
         self.config.state_normalizer.unset_read_only()
         return action
 
-    def _compute_intrinsic_reward(self, state, action, next_state):
-        """
-        Computes the RND intrinsic reward based on the s,a,s' transition.
-        In order to normalize the states and rewards, we use running mean and
-        std estimates.
-        """
-        state = self.config.state_normalizer((state,))
-        state = self.rnd_state_normalizer(state)
-
-        with torch.no_grad():
-            pred_state = self.pred_net_rnd(state)
-            targ_state = self.targ_net_rnd(state)
-            reward = to_np((pred_state - targ_state).pow(2).sum())
-            if self.rnd_reward_normalizer is not None:
-                reward = self.rnd_reward_normalizer([[reward]])[0,0]
-
-        if self.total_steps <= self.config.steps_before_rnd:
-            return 0 # ignore intrinsic reward when we do not have enough data
-
-        return reward
-
     def step(self):
         config = self.config
 
@@ -117,21 +98,21 @@ class DQNRNDAgent(BaseAgent):
             self.record_online_return(info)
             self.total_steps += 1
             reward = config.reward_normalizer(reward)
-            reward_rnd = self._compute_intrinsic_reward(state, action, next_state)
-            experiences.append([state, action, reward, reward_rnd, next_state, done])
+            reward_i = self.fir(state, action, next_state) # intrinsic reward
+            experiences.append([state, action, reward, reward_i, next_state, done])
         self.replay.feed_batch(experiences)
 
         # LEARN - perform SGD
         if self.total_steps > self.config.exploration_steps:
             ## Extract batch of transitions
             experiences = self.replay.sample()
-            states, actions, rewards, rewards_rnd, next_states, terminals = experiences
+            states, actions, rewards, rewards_i, next_states, terminals = experiences
 
             states = self.config.state_normalizer(states)
             actions = tensor(actions).long()
             next_states = self.config.state_normalizer(next_states)
             rewards = tensor(rewards)
-            rewards_rnd = tensor(rewards_rnd)
+            rewards_i = tensor(rewards_i) # intrinsic rewards
             terminals = tensor(terminals)
 
             ## Compute the DQN loss
@@ -141,25 +122,16 @@ class DQNRNDAgent(BaseAgent):
                 q_next = q_next[self.batch_indices, best_actions]
             else:
                 q_next = q_next.max(1)[0]
-            total_rewards = self.coef_r*rewards + self.coef_rrnd*rewards_rnd
+            total_rewards = self.coef_r*rewards + self.coef_r_i*rewards_i
             q_next = self.config.discount * q_next * (1 - terminals)
             q_next.add_(total_rewards)
             q = self.network(states)
             q = q[self.batch_indices, actions]
             loss_dqn = (q_next - q).pow(2).mul(0.5).mean()
 
-            ## Compute the RND loss
-            pred_rnd = self.pred_net_rnd(states)
-            with torch.no_grad():
-                targ_rnd = self.targ_net_rnd(states)
-            loss_rnd = (pred_rnd - targ_rnd).pow(2)
-            ### Mask out results (don't learn too fast /o/)
-            mask = torch.rand(loss_rnd.shape[1]).to(config.DEVICE) # keep only every 4th state
-            mask = (mask < config.rnd_update_p).float()
-            loss_rnd = (loss_rnd * mask).sum() / mask.sum().clamp(min=1)
-
-            ## Total loss
-            loss = loss_dqn + loss_rnd
+            ## Compute fir loss and total loss
+            loss_ri = self.fir.compute_loss(states, actions, next_states)
+            loss = loss_dqn + loss_ri
 
             ## Optimize & stuff
             self.optimizer.zero_grad()

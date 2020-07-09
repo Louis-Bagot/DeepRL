@@ -98,3 +98,6 @@ images_data
 mjkey.txt
 .DS_Store
 tf_log
+
+# gpulab stuff
+gpulab_job.js

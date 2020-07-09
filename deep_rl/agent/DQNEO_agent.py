@@ -11,7 +11,7 @@ import time
 from .BaseAgent import *
 
 
-class DQNRNDActor(BaseActor):
+class DQNEOActor(BaseActor):
     def __init__(self, config):
         BaseActor.__init__(self, config)
         self.config = config
@@ -36,7 +36,7 @@ class DQNRNDActor(BaseActor):
         return entry
 
 
-class DQNRNDAgent(BaseAgent):
+class DQNEOAgent(BaseAgent):
     def __init__(self, config):
         # CONFIG STUFF
         BaseAgent.__init__(self, config)
@@ -60,13 +60,13 @@ class DQNRNDAgent(BaseAgent):
         self.optimizer = config.optimizer_fn(total_params)
 
         # ACTOR
-        self.actor = DQNRNDActor(config)
+        self.actor = DQNEOActor(config)
         self.actor.set_network(self.network)
 
         # RND NORMALIZATION AND HYPERPARAMETERS
         self.rnd_state_normalizer = MeanStdNormalizer(clip=5)
-        # self.rnd_reward_normalizer = MeanStdNormalizer(clip=None)
-        self.rnd_reward_normalizer = None
+        self.rnd_reward_normalizer = MeanStdNormalizer(clip=None)
+        # self.rnd_reward_normalizer = None
         self.coef_r = config.coef_r # reward coefficient in the total reward r = w1*r+w2*r_i
         self.coef_rrnd = config.coef_rrnd
 

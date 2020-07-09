@@ -10,11 +10,11 @@ import os
 
 
 def select_device(gpu_id):
-    # if torch.cuda.is_available() and gpu_id >= 0:
-    if gpu_id >= 0:
+    if torch.cuda.is_available() and gpu_id >= 0:
         Config.DEVICE = torch.device('cuda:%d' % (gpu_id))
     else:
         Config.DEVICE = torch.device('cpu')
+    print("Cuda Torch available: {}; using device {}".format(torch.cuda.is_available(), Config.DEVICE))
 
 
 def tensor(x):

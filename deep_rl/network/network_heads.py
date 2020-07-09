@@ -37,6 +37,26 @@ class DuelingNet(nn.Module, BaseNet):
         return q
 
 
+class DuelingNetEO(nn.Module, BaseNet):
+    def __init__(self, action_dim, body):
+        super(DuelingNet, self).__init__()
+        self.fc_value = layer_init(nn.Linear(body.feature_dim, 1))
+        self.fc_advantage = layer_init(nn.Linear(body.feature_dim, action_dim))
+        self.body = body
+        # _x refers to the Explorer
+        self.fc_value_x = layer_init(nn.Linear(body.feature_dim, 1))
+        self.fc_advantage_x = layer_init(nn.Linear(body.feature_dim, action_dim))
+        self.body = body
+        self.to(Config.DEVICE)
+
+    def forward(self, x, to_numpy=False):
+        phi = self.body(tensor(x))
+        value = self.fc_value(phi)
+        advantange = self.fc_advantage(phi)
+        q = value.expand_as(advantange) + (advantange - advantange.mean(1, keepdim=True).expand_as(advantange))
+        return q
+
+
 class CategoricalNet(nn.Module, BaseNet):
     def __init__(self, action_dim, num_atoms, body):
         super(CategoricalNet, self).__init__()
@@ -117,7 +137,7 @@ class DeterministicActorCriticNet(nn.Module, BaseNet):
         self.actor_params = list(self.actor_body.parameters()) + list(self.fc_action.parameters())
         self.critic_params = list(self.critic_body.parameters()) + list(self.fc_critic.parameters())
         self.phi_params = list(self.phi_body.parameters())
-        
+
         self.actor_opt = actor_opt_fn(self.actor_params + self.phi_params)
         self.critic_opt = critic_opt_fn(self.critic_params + self.phi_params)
         self.to(Config.DEVICE)
@@ -202,7 +222,7 @@ class CategoricalActorCriticNet(nn.Module, BaseNet):
         self.actor_params = list(self.actor_body.parameters()) + list(self.fc_action.parameters())
         self.critic_params = list(self.critic_body.parameters()) + list(self.fc_critic.parameters())
         self.phi_params = list(self.phi_body.parameters())
-        
+
         self.to(Config.DEVICE)
 
     def forward(self, obs, action=None):

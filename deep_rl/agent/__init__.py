@@ -1,4 +1,6 @@
 from .DQN_agent import *
+from .DQNRND_agent import *
+from .DQN_IM_agent import *
 from .DDPG_agent import *
 from .A2C_agent import *
 from .CategoricalDQN_agent import *
